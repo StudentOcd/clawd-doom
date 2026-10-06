@@ -27,8 +27,38 @@
 
 #ifdef _WIN32
 
-#define strcasecmp _stricmp
-#define strncasecmp _strnicmp
+// clawd-doom: the C runtime's _stricmp/_strnicmp never return in this build
+// (the engine hung on its first texture lookup), so compare in plain ASCII.
+#include <stddef.h>
+#include <string.h>  // first, so its own strcasecmp declarations come before the macros below
+
+static inline int dg_lower(int c)
+{
+    return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
+}
+
+static inline int dg_strncasecmp(const char *a, const char *b, size_t n)
+{
+    for (; n > 0; a++, b++, n--)
+    {
+        int d = dg_lower((unsigned char)*a) - dg_lower((unsigned char)*b);
+
+        if (d != 0 || *a == '\0')
+        {
+            return d;
+        }
+    }
+
+    return 0;
+}
+
+static inline int dg_strcasecmp(const char *a, const char *b)
+{
+    return dg_strncasecmp(a, b, (size_t)-1);
+}
+
+#define strcasecmp dg_strcasecmp
+#define strncasecmp dg_strncasecmp
 
 #else
 

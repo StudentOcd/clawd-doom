@@ -122,8 +122,8 @@ describe('playing', () => {
 
     expect(spawned).toHaveLength(1)
     expect(spawned[0]!.argv[0]).toMatch(/\/bin\/linux-x64\/clawd-doom$/)
-    expect(spawned[0]!.argv.slice(1, 2)).toEqual(['-iwad'])
-    expect(spawned[0]!.argv[2]).toMatch(/\/wad\/freedoom1\.wad$/)
+    expect(spawned[0]!.argv.slice(1, 3)).toEqual(['-nogui', '-iwad'])
+    expect(spawned[0]!.argv[3]).toMatch(/\/wad\/freedoom1\.wad$/)
     expect(spawned[0]!.env?.CLAWD_DOOM_CONTROL).toMatch(/\.clawd-doom-control$/)
 
     engine.send(frameLine(64, 24, 0xff0000))
@@ -190,6 +190,21 @@ describe('playing', () => {
     const after = writes.length
     await clock.advance(HEARTBEAT_MS * 3)
     expect(writes.length).toBe(after)
+    await pane.unmount()
+  })
+
+  test('while it loads, the pane shows what the engine is doing', async ($, on) => {
+    const { clock, engine } = world(on)
+    await start($)
+    const pane = await mount($)
+    await doom($)
+
+    engine.send('W_Init: Init WADfiles.\n')
+    await clock.advance(10)
+    expect(await shown(pane)).toContain('loading DOOM… W_Init: Init WADfiles.')
+
+    engine.end()
+    await clock.advance(10)
     await pane.unmount()
   })
 

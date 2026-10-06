@@ -243,11 +243,13 @@ void DG_Init(void)
 
 void DG_DrawFrame(void)
 {
-    uint32_t now = DG_GetTicksMs();
-
     read_control();
 
-    if (control_path && now - last_seq_at > HEARTBEAT_MS) {
+    // Read the clock after the control file: reading it can stamp last_seq_at,
+    // and a clock read before that would make the difference wrap around.
+    uint32_t now = DG_GetTicksMs();
+
+    if (control_path && (int32_t)(now - last_seq_at) > HEARTBEAT_MS) {
         fprintf(stderr, "clawd-doom: the plugin stopped answering, quitting\n");
         exit(0);
     }

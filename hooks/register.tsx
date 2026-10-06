@@ -172,7 +172,8 @@ async function start($: EngineInterface, wad: string) {
   ]
 
   const stream = $.process.spawn({
-    argv: [engine, '-iwad', iwad],
+    // -nogui: an engine error is printed for the pane, never a dialog box nobody can see.
+    argv: [engine, '-nogui', '-iwad', iwad],
     cwd: root,
     env: { CLAWD_DOOM_CONTROL: game.controlPath },
   })
@@ -197,7 +198,14 @@ async function start($: EngineInterface, wad: string) {
         let frame: Screen | null = null
 
         for (const line of lines) {
-          frame = parseFrame(line.replace(/\r$/, '')) ?? frame
+          const text = line.replace(/\r$/, '')
+          const parsed = parseFrame(text)
+          frame = parsed ?? frame
+
+          // Until the first frame, show what the engine is doing so a slow start never looks stuck.
+          if (!parsed && isFirst && text.trim() && !/^[=\s]+$/.test(text)) {
+            void setStatus($, `loading DOOM… ${text.trim()}`)
+          }
         }
 
         if (frame) {
