@@ -1,0 +1,6 @@
+{
+  "name": "clawd-doom",
+  "description": "DOOM in Claude Code.",
+  "owner": { "name": "StudentOcd" },
+  "plugins": [{ "name": "clawd-doom", "source": "./" }]
+}

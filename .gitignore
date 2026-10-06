@@ -1,0 +1,7 @@
+.claude-plugin/types/
+tsconfig.json
+node_modules/
+# What the game writes while it runs, in the plugin's folder.
+.clawd-doom-control
+.default.cfg
+.savegame/
