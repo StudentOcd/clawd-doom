@@ -5,3 +5,5 @@ node_modules/
 .clawd-doom-control
 .default.cfg
 .savegame/
+out.txt
+err.txt
