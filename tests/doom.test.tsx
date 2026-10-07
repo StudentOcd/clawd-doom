@@ -4,6 +4,7 @@ import type { Engine } from 'claude-code/testing'
 
 import {
   FIRST_HOLD_MS,
+  FIELD_LIMIT,
   HEARTBEAT_MS,
   NO_PICTURE_MS,
   REPEAT_HOLD_MS,
@@ -14,6 +15,7 @@ import {
   parseFrame,
   press,
   release,
+  typedSince,
   VERSION,
 } from '../hooks/doom'
 import type { Held } from '../hooks/doom'
@@ -176,6 +178,55 @@ describe('playing', () => {
     await pane.unmount()
   })
 
+  test('typing into the field plays, no click needed', async ($, on) => {
+    const { clock, writes, engine } = world(on)
+    await start($)
+    const pane = await mount($)
+    await doom($)
+    expect(await pane.find({ key: 'play' })).toBeTruthy()
+
+    await pane.input({ key: 'play', text: 'w', kind: 'change' })
+    expect(writes.at(-1)).toMatch(/\n173\n$/)
+
+    await pane.input({ key: 'play', text: 'wf', kind: 'change' })
+    expect(writes.at(-1)).toMatch(/\n163 173\n$/)
+
+    await clock.advance(FIRST_HOLD_MS + 100)
+    await pane.input({ key: 'play', text: 'wf', kind: 'submit' })
+    expect(writes.at(-1)).toMatch(/\n13\n$/)
+
+    engine.end()
+    await clock.advance(10)
+    await pane.unmount()
+  })
+
+  test('the field empties itself once it fills up, without pressing anything', async ($, on) => {
+    const { clock, writes, engine } = world(on)
+    await start($)
+    const pane = await mount($)
+    await doom($)
+
+    let text = ''
+
+    for (let i = 0; i <= FIELD_LIMIT; i++) {
+      text += 'w'
+      await pane.input({ key: 'play', text, kind: 'change' })
+    }
+
+    expect((await pane.find({ key: 'play' }))!.props).toEqual(expect.objectContaining({ value: '›' }))
+
+    // The field now reads '›' and what follows is new; the old text shrinking away presses nothing.
+    await clock.advance(FIRST_HOLD_MS + 100)
+    await pane.input({ key: 'play', text: '›', kind: 'change' })
+    expect(writes.at(-1)).toMatch(/\n\n$/)
+    await pane.input({ key: 'play', text: '›f', kind: 'change' })
+    expect(writes.at(-1)).toMatch(/\n163\n$/)
+
+    engine.end()
+    await clock.advance(10)
+    await pane.unmount()
+  })
+
   test('the heartbeat keeps the engine alive, and /doom-quit stops it', async ($, on) => {
     const { clock, writes, engine } = world(on)
     await start($)
@@ -252,7 +303,7 @@ describe('playing', () => {
     expect(writes.at(-1)).toMatch(/^\d+ 64 24\n/)
     await pane.redraw({ ...PANE_PROPS, bodyColumns: 160, scroll: { offset: 0, bodyRows: 50 } })
     await clock.advance(10)
-    expect(writes.at(-1)).toMatch(/^\d+ 130 49\n/)
+    expect(writes.at(-1)).toMatch(/^\d+ 128 48\n/)
 
     engine.end()
     await clock.advance(10)
@@ -284,6 +335,12 @@ describe('keys', () => {
     expect(press(held, 'z', NOW)).toBe(false)
   })
 
+  test('only what was added to the field counts as typed', () => {
+    expect(typedSince('ww', 'wwf')).toBe('f')
+    expect(typedSince('wwf', 'ww')).toBe('')
+    expect(typedSince('abc', 'xyz')).toBe('')
+  })
+
   test('the control file lists the held keys in order', () => {
     const held: Held = new Map([
       [0xa3, NOW],
@@ -302,7 +359,7 @@ describe('frames and machines', () => {
 
   test('the picture is the biggest 4:3 that fits', () => {
     expect(fitScreen(120, 100)).toEqual({ columns: 120, rows: 45 })
-    expect(fitScreen(200, 31)).toEqual({ columns: 80, rows: 30 })
+    expect(fitScreen(200, 31)).toEqual({ columns: 77, rows: 29 })
     expect(fitScreen(4, 4)).toEqual({ columns: 16, rows: 6 })
   })
 

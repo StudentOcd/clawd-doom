@@ -1,6 +1,6 @@
 {
   "name": "clawd-doom",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Play DOOM inside Claude Code: /doom opens a pane and runs the game in your terminal, drawn in half-block pixels.",
   "author": { "name": "StudentOcd" },
   "license": "GPL-2.0",

@@ -1,12 +1,14 @@
 import type { Screen } from '../types'
 
 // Shown while loading, so you can tell which version is running. Keep in step with plugin.json.
-export const VERSION = '0.1.1'
+export const VERSION = '0.1.2'
 export const PANE = 'doom'
 export const CONTROL_FILE = '.clawd-doom-control'
 // What the engine printed, kept for when something goes wrong.
 export const LOG_FILE = 'clawd-doom.log'
 export const NO_PICTURE_MS = 15_000
+// The key field is emptied once it holds this many characters.
+export const FIELD_LIMIT = 80
 // How often held keys are checked for release, and how often the engine hears we are still here.
 export const KEY_TICK_MS = 40
 export const HEARTBEAT_MS = 1000
@@ -25,20 +27,24 @@ export const TAP_MS = 120
 
 type Binding = { codes: number[]; tap?: boolean }
 
+// Every key here can be typed into the pane's field (letters, digits, Space, Enter),
+// so the game plays with no click; arrows, Tab and Backspace work once the strip is clicked.
 const KEYS: Record<string, Binding> = {
-  up: { codes: [UP] }, w: { codes: [UP] },
-  down: { codes: [DOWN] }, s: { codes: [DOWN] },
-  left: { codes: [LEFT] }, right: { codes: [RIGHT] },
-  a: { codes: [STRAFE_L] }, d: { codes: [STRAFE_R] },
-  ',': { codes: [STRAFE_L] }, '.': { codes: [STRAFE_R] },
+  w: { codes: [UP] }, up: { codes: [UP] },
+  s: { codes: [DOWN] }, down: { codes: [DOWN] },
+  a: { codes: [LEFT] }, left: { codes: [LEFT] },
+  d: { codes: [RIGHT] }, right: { codes: [RIGHT] },
+  q: { codes: [STRAFE_L] }, ',': { codes: [STRAFE_L] },
+  e: { codes: [STRAFE_R] }, '.': { codes: [STRAFE_R] },
   // Capitals (Shift held) run.
-  W: { codes: [UP, RUN] }, S: { codes: [DOWN, RUN] }, A: { codes: [STRAFE_L, RUN] }, D: { codes: [STRAFE_R, RUN] },
-  f: { codes: [FIRE] }, F: { codes: [FIRE] }, x: { codes: [FIRE] }, ' ': { codes: [FIRE] }, space: { codes: [FIRE] },
-  e: { codes: [USE], tap: true }, E: { codes: [USE], tap: true },
+  W: { codes: [UP, RUN] }, S: { codes: [DOWN, RUN] }, A: { codes: [LEFT, RUN] }, D: { codes: [RIGHT, RUN] },
+  Q: { codes: [STRAFE_L, RUN] }, E: { codes: [STRAFE_R, RUN] },
+  f: { codes: [FIRE] }, F: { codes: [FIRE] },
+  ' ': { codes: [USE], tap: true }, space: { codes: [USE], tap: true },
   return: { codes: [ENTER], tap: true }, enter: { codes: [ENTER], tap: true },
-  // Escape never reaches the game (it hands the keyboard back), so the menu has its own keys.
-  m: { codes: [ESCAPE], tap: true }, q: { codes: [ESCAPE], tap: true }, backspace: { codes: [ESCAPE], tap: true },
-  tab: { codes: [TAB], tap: true },
+  // Escape never reaches the game (it hands the keyboard back), so the menu has its own key.
+  x: { codes: [ESCAPE], tap: true }, X: { codes: [ESCAPE], tap: true }, backspace: { codes: [ESCAPE], tap: true },
+  m: { codes: [TAB], tap: true }, M: { codes: [TAB], tap: true }, tab: { codes: [TAB], tap: true },
   y: { codes: [121], tap: true }, n: { codes: [110], tap: true },
   '-': { codes: [45], tap: true }, '=': { codes: [61], tap: true },
 }
@@ -49,6 +55,12 @@ for (const digit of '1234567') {
 
 export function bindingFor(key: string): Binding | null {
   return KEYS[key] ?? KEYS[key.toLowerCase()] ?? null
+}
+
+// What was typed into the field since it last held `before`: the new characters,
+// or none when the text shrank or was replaced (Enter, a reset, a deletion).
+export function typedSince(before: string, after: string): string {
+  return after.startsWith(before) ? after.slice(before.length) : ''
 }
 
 // Held keys: DOOM key code to the time it is let go.
@@ -115,9 +127,9 @@ export function parseFrame(line: string): Screen | null {
 }
 
 // The biggest 4:3 picture that fits the pane's body, in cells (each cell two pixels tall).
-// One row is kept for the line of help beneath it.
+// Two rows are kept beneath it: the key field and the line of help.
 export function fitScreen(bodyColumns: number, bodyRows: number): { columns: number; rows: number } {
-  const room = Math.max(4, bodyRows - 1)
+  const room = Math.max(4, bodyRows - 2)
   let columns = Math.min(512, Math.max(16, bodyColumns))
   let rows = Math.floor((columns * 3) / 8)
 
@@ -148,4 +160,4 @@ export const join = (root: string, name: string) =>
   /^[a-zA-Z]:[\\/]/.test(root) || root.startsWith('\\\\') ? `${root}\\${name}` : `${root}/${name}`
 
 export const HELP =
-  'click the screen, then: WASD/arrows move · f/space fire · e use · Shift+WASD run · 1-7 weapons · Tab map · m menu · Enter select · Esc lets go'
+  'type to play: W/S move · A/D turn · Q/E strafe · F fire · Space doors · Shift run · 1-7 weapons · M map · Enter select · X menu · Esc gives the keyboard back'

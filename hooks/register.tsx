@@ -6,6 +6,7 @@ import {
   CONTROL_FILE,
   HEARTBEAT_MS,
   HELP,
+  FIELD_LIMIT,
   KEY_TICK_MS,
   LOG_FILE,
   NO_PICTURE_MS,
@@ -17,12 +18,15 @@ import {
   parseFrame,
   press,
   release,
+  typedSince,
   VERSION,
 } from './doom'
 import type { Held } from './doom'
 
 const screen = atom({ plugin: 'clawd-doom', key: 'screen' } as const, null as Screen | null)
 const status = atom({ plugin: 'clawd-doom', key: 'status' } as const, '')
+// The text the key field is drawn with: '' or '›' in turn, so drawing the other one empties it.
+const field = atom({ plugin: 'clawd-doom', key: 'field' } as const, '')
 
 // The running game, kept in one object so the helpers can sit at the top level of the file.
 type Game = {
@@ -39,6 +43,8 @@ type Game = {
   redrawnAt: number
   writing: Promise<void>
   controlPath: string
+  // The key field's text as last seen, and the text it was last reset to.
+  typed: string
 }
 
 const game: Game = {
@@ -54,6 +60,7 @@ const game: Game = {
   redrawnAt: 0,
   writing: Promise.resolve(),
   controlPath: '',
+  typed: '',
 }
 
 // Tells the engine the size to draw and the keys held; writes run one after another.
@@ -278,10 +285,12 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'doom' }, async $ => {
     const opened = await $.ui.open({ id: PANE, title: 'DOOM', focus: true, rows: 60 })
     await start($, wad)
+    // The field takes the keys whenever the pane holds them; this is in case it already did.
+    void $.ui.focus({ requestId: PANE, key: 'play' }).catch(() => undefined)
 
     return {
       text: opened.isPlaced
-        ? 'DOOM is running in the pane. Click the screen to take the keyboard; Esc gives it back.'
+        ? 'DOOM is running in the pane: just type to play (W/S move, A/D turn, F fire, Space doors, X menu). If keys go to the prompt instead, click the DOOM pane. Esc gives the keyboard back.'
         : `DOOM is running, but its pane is waiting for room: ${opened.reason}`,
     }
   })
@@ -306,6 +315,33 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // Every key typed into the field: the characters added since the last change.
+  on('ui.input', { requestId: 'doom' }, async ($, e, next) => {
+    if (game.isRunning && e.element === 'play') {
+      const now = await $.clock.now()
+      const keys = e.kind === 'submit' ? ['return'] : [...typedSince(game.typed, e.value)]
+      game.typed = e.kind === 'submit' ? game.typed : e.value
+      let changed = false
+
+      for (const key of keys) {
+        changed = press(game.held, key, now) || changed
+      }
+
+      if (changed) {
+        await writeControl($)
+      }
+
+      // Empty the field now and then, by drawing it with the other of its two starting texts.
+      if (game.typed.length > FIELD_LIMIT) {
+        const emptied = (await read($, field)) === '' ? '›' : ''
+        game.typed = emptied
+        await update($, field, () => emptied)
+      }
+    }
+
+    return next(e)
+  })
+
   on('ui.close', { id: 'doom' }, async ($, e, next) => {
     stop($)
 
@@ -319,7 +355,7 @@ export const register: Register = (on, options) => {
       return <Text>DOOM plays in the terminal only.</Text>
     }
 
-    const { Raster, Client } = $.ui.resolve(e)
+    const { Raster, Client, Input } = $.ui.resolve(e)
     const want = fitScreen(e.props.bodyColumns, e.props.scroll.bodyRows)
 
     if (want.columns !== game.want.columns || want.rows !== game.want.rows) {
@@ -332,6 +368,7 @@ export const register: Register = (on, options) => {
 
     const frame = await read($, screen)
     const said = await read($, status)
+    const reset = await read($, field)
 
     return (
       <Box flexDirection="column">
@@ -340,6 +377,15 @@ export const register: Register = (on, options) => {
         ) : (
           <Text>{said || 'Type /doom to start.'}</Text>
         )}
+        <Input
+          key="play"
+          label="keys ▸ "
+          placeholder="type here to play"
+          submitLabel="Enter in DOOM"
+          value={reset}
+          autoFocus
+          onSubmit={() => {}}
+        />
         <Client key="keys" module="./keys.tsx" props={{ help: HELP, status: frame ? said : '' }} />
       </Box>
     )

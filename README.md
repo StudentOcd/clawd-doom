@@ -2,9 +2,9 @@
 
 Play **DOOM** inside [Claude Code](https://claude.com/claude-code), in your terminal.
 
-Type `/doom` and a pane opens with the game running in it, drawn in coloured half-block pixels. Click the
-screen to give it the keyboard and play; `Esc` hands the keyboard back to Claude Code. Claude keeps working
-while you play.
+Type `/doom` and a pane opens with the game running in it, drawn in coloured half-block pixels. **Just type
+to play**: the pane takes the keyboard and every key goes to the game, no click needed. `Esc` hands the
+keyboard back to Claude Code; click the DOOM pane to take it again. Claude keeps working while you play.
 
 It ships with [Freedoom](https://freedoom.github.io/) (free, BSD-licensed DOOM-compatible levels and art), so
 it works straight after install. Point it at your own `DOOM.WAD`, `DOOM1.WAD` (shareware) or `DOOM2.WAD` to
@@ -28,14 +28,20 @@ Requires Claude Code with function-hook mods (early access), and a terminal that
 
 | Key | Action |
 | --- | --- |
-| `W` `A` `S` `D` or arrows | Move, strafe (`A`/`D`), turn (`←`/`→`) |
-| `Shift` + `W` `A` `S` `D` | Run |
-| `F`, `X` or `Space` | Fire |
-| `E` | Use (doors, switches) |
+| `W` / `S` | Forward / back |
+| `A` / `D` | Turn left / right |
+| `Q` / `E` | Strafe left / right |
+| `Shift` + any of those | Run |
+| `F` | Fire (hold to keep firing) |
+| `Space` | Use: open doors, press switches |
 | `1` – `7` | Weapons |
-| `Tab` | Automap |
-| `M` or `Q` | Menu (Esc can't reach the game: it gives the keyboard back) |
+| `M` | Automap |
+| `X` | Menu (Esc can't reach the game: it gives the keyboard back) |
 | `Enter`, `Y`, `N` | Menu choices |
+
+The keys go through a small field under the picture, which is why only letters, digits, Space and Enter are
+used. If your terminal passes mouse clicks to Claude Code, clicking the help line under the field also lets
+the arrow keys, `Tab` and `Backspace` work.
 
 A terminal tells programs when a key is pressed but never when it's released, so a held key keeps you moving
 until about half a second after your last press, about as long as the terminal waits before it starts repeating

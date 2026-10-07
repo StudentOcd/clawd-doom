@@ -6,6 +6,7 @@ declare module 'claude-code' {
     'clawd-doom': {
       screen: Screen | null
       status: string
+      field: string
     }
   }
 }
