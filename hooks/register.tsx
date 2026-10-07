@@ -7,6 +7,8 @@ import {
   HEARTBEAT_MS,
   HELP,
   KEY_TICK_MS,
+  LOG_FILE,
+  NO_PICTURE_MS,
   PANE,
   controlText,
   enginePath,
@@ -15,6 +17,7 @@ import {
   parseFrame,
   press,
   release,
+  VERSION,
 } from './doom'
 import type { Held } from './doom'
 
@@ -94,8 +97,13 @@ async function show($: EngineInterface, frame: Screen) {
   }
 }
 
-async function setStatus($: EngineInterface, text: string) {
-  await update($, status, () => text)
+// Status writes run one after another, so an older message never lands after a newer one.
+let statusWrite: Promise<void> = Promise.resolve()
+
+function setStatus($: EngineInterface, text: string) {
+  statusWrite = statusWrite.then(async () => void (await update($, status, () => text))).catch(() => {})
+
+  return statusWrite
 }
 
 function stop($: EngineInterface) {
@@ -155,7 +163,22 @@ async function start($: EngineInterface, wad: string) {
   game.seq += 1
   game.shown = null
   await writeControl($)
-  await setStatus($, 'loading DOOM…')
+  await setStatus($, `loading DOOM ${VERSION}…`)
+  const startedAt = await $.clock.now()
+  const logPath = join(root, LOG_FILE)
+  const said: string[] = []
+  let logWrite = Promise.resolve()
+  let isFirst = true
+
+  // Everything the engine prints that is not a frame, kept in a file to send when something goes wrong.
+  const note = (text: string) => {
+    said.push(text)
+    said.splice(0, Math.max(0, said.length - 200))
+    const content = `clawd-doom ${VERSION}\nengine: ${engine}\nwad: ${iwad}\n\n${said.join('\n')}\n`
+    logWrite = logWrite.then(() => $.fs.write(logPath, content)).catch(() => {})
+  }
+
+  note(`started ${new Date(startedAt).toISOString()}`)
 
   game.timers = [
     $.clock.every(KEY_TICK_MS, () => {
@@ -168,6 +191,13 @@ async function start($: EngineInterface, wad: string) {
     $.clock.every(HEARTBEAT_MS, () => {
       game.seq += 1
       void writeControl($)
+      void $.clock.now().then(now => {
+        // No picture yet: say so, with the engine's last words, rather than look stuck.
+        if (isFirst && now - startedAt >= NO_PICTURE_MS) {
+          const last = said.length > 1 ? said.at(-1) : 'nothing at all'
+          void setStatus($, `No picture after ${Math.round((now - startedAt) / 1000)}s. The engine last said: ${last}. Log: ${logPath}`)
+        }
+      })
     }),
   ]
 
@@ -183,12 +213,12 @@ async function start($: EngineInterface, wad: string) {
   void (async () => {
     let buffer = ''
     let error = ''
-    let isFirst = true
 
     try {
       for await (const chunk of stream) {
         if (chunk.stream === 'stderr') {
           error = chunk.text.trim().split('\n').at(-1) ?? error
+          note(`stderr: ${chunk.text.trim()}`)
           continue
         }
 
@@ -203,14 +233,19 @@ async function start($: EngineInterface, wad: string) {
           frame = parsed ?? frame
 
           // Until the first frame, show what the engine is doing so a slow start never looks stuck.
+          if (!parsed && text.trim()) {
+            note(text.trim())
+          }
+
           if (!parsed && isFirst && text.trim() && !/^[=\s]+$/.test(text)) {
-            void setStatus($, `loading DOOM… ${text.trim()}`)
+            void setStatus($, `loading DOOM ${VERSION}… ${text.trim()}`)
           }
         }
 
         if (frame) {
           if (isFirst) {
             isFirst = false
+            note(`first frame after ${(await $.clock.now()) - startedAt}ms`)
             void setStatus($, '')
           }
 
@@ -220,6 +255,8 @@ async function start($: EngineInterface, wad: string) {
     } catch (failure) {
       error = String(failure)
     }
+
+    note(`engine ended${error ? `: ${error}` : ''}`)
 
     if (game.isRunning) {
       stop($)

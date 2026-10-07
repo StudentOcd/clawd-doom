@@ -5,6 +5,7 @@ import type { Engine } from 'claude-code/testing'
 import {
   FIRST_HOLD_MS,
   HEARTBEAT_MS,
+  NO_PICTURE_MS,
   REPEAT_HOLD_MS,
   TAP_MS,
   controlText,
@@ -13,6 +14,7 @@ import {
   parseFrame,
   press,
   release,
+  VERSION,
 } from '../hooks/doom'
 import type { Held } from '../hooks/doom'
 
@@ -56,7 +58,9 @@ const PANE_PROPS = {
 // that streams the frames the test hands it until the test or the plugin ends it.
 function world(on: On, options: { engineExists?: boolean } = {}) {
   const clock = mock.clock(on, { now: NOW })
+  // What the plugin writes to the control file, and to its log.
   const writes: string[] = []
+  const logs: string[] = []
   const spawned: { argv: readonly string[]; env?: Record<string, string> }[] = []
   const engine = { send: (_text: string) => {}, end: () => {}, isAlive: false }
 
@@ -67,7 +71,7 @@ function world(on: On, options: { engineExists?: boolean } = {}) {
   on('process.run', () => ({ value: { exitCode: 0, stdout: 'Linux x86_64\n', stderr: '' } as never }))
   on('fs.exists', ($, e) => ({ value: (options.engineExists ?? true) || !e.path.includes('/bin/') }))
   on('fs.write', ($, e) => {
-    writes.push(e.text)
+    ;(e.path.endsWith('.log') ? logs : writes).push(e.text)
 
     return { value: undefined as never }
   })
@@ -100,7 +104,7 @@ function world(on: On, options: { engineExists?: boolean } = {}) {
     return { value: { code: 0, signal: null } }
   })
 
-  return { clock, writes, spawned, engine }
+  return { clock, writes, logs, spawned, engine }
 }
 
 const start = ($: Engine) => $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
@@ -148,6 +152,7 @@ describe('playing', () => {
     engine.send(line.slice(50))
     await clock.advance(10)
     expect((await rasters(pane))[0]!.props).toEqual(expect.objectContaining({ columns: 32, rows: 12 }))
+    expect(await shown(pane)).not.toContain('loading DOOM')
 
     engine.end()
     await clock.advance(10)
@@ -201,7 +206,26 @@ describe('playing', () => {
 
     engine.send('W_Init: Init WADfiles.\n')
     await clock.advance(10)
-    expect(await shown(pane)).toContain('loading DOOM… W_Init: Init WADfiles.')
+    expect(await shown(pane)).toContain(`loading DOOM ${VERSION}… W_Init: Init WADfiles.`)
+
+    engine.end()
+    await clock.advance(10)
+    await pane.unmount()
+  })
+
+  test('no picture after a while: says so, with what the engine last printed and where the log is', async ($, on) => {
+    const { clock, logs, engine } = world(on)
+    await start($)
+    const pane = await mount($)
+    await doom($)
+
+    engine.send('R_Init: Init DOOM refresh daemon\n')
+    await clock.advance(NO_PICTURE_MS + HEARTBEAT_MS)
+    const said = await shown(pane)
+    expect(said).toContain('No picture after')
+    expect(said).toContain('R_Init: Init DOOM refresh daemon')
+    expect(said).toContain('clawd-doom.log')
+    expect(logs.some(text => text.startsWith(`clawd-doom ${VERSION}`) && text.includes('R_Init'))).toBe(true)
 
     engine.end()
     await clock.advance(10)

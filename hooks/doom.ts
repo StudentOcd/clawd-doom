@@ -1,7 +1,12 @@
 import type { Screen } from '../types'
 
+// Shown while loading, so you can tell which version is running. Keep in step with plugin.json.
+export const VERSION = '0.1.1'
 export const PANE = 'doom'
 export const CONTROL_FILE = '.clawd-doom-control'
+// What the engine printed, kept for when something goes wrong.
+export const LOG_FILE = 'clawd-doom.log'
+export const NO_PICTURE_MS = 15_000
 // How often held keys are checked for release, and how often the engine hears we are still here.
 export const KEY_TICK_MS = 40
 export const HEARTBEAT_MS = 1000

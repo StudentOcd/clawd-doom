@@ -7,3 +7,4 @@ node_modules/
 .savegame/
 out.txt
 err.txt
+clawd-doom.log
